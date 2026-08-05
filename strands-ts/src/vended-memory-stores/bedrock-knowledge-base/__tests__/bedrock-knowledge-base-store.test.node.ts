@@ -376,14 +376,31 @@ describe('BedrockKnowledgeBaseStore', () => {
     it('passes through wrappers it cannot interpret rather than coercing them', async () => {
       const { store, runtime } = makeStore()
       const unparseable = { string: 'not-a-number', type: 'bigDecimal' }
+      // Number('Infinity') parses, so it needs an explicit guard: returning it
+      // would put a non-JSON value into metadata.
+      const infinite = { string: 'Infinity', type: 'bigDecimal' }
+      const badBoolean = { string: 'yes', type: 'boolean' }
       const unknownTag = { string: 'x', type: 'someFutureType' }
       const notAWrapper = { string: 'no type field' }
+      const wrapperOfWrongTypes = { string: 3, type: 7 }
       runtime.send.mockResolvedValue({
-        retrievalResults: [{ content: { text: 'fact' }, metadata: { unparseable, unknownTag, notAWrapper } }],
+        retrievalResults: [
+          {
+            content: { text: 'fact' },
+            metadata: { unparseable, infinite, badBoolean, unknownTag, notAWrapper, wrapperOfWrongTypes },
+          },
+        ],
       })
 
       const [entry] = await store.search('q')
-      expect(entry?.metadata).toStrictEqual({ unparseable, unknownTag, notAWrapper })
+      expect(entry?.metadata).toStrictEqual({
+        unparseable,
+        infinite,
+        badBoolean,
+        unknownTag,
+        notAWrapper,
+        wrapperOfWrongTypes,
+      })
     })
 
     it('defaults missing content to an empty string and omits absent metadata', async () => {

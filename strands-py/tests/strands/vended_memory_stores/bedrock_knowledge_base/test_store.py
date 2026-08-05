@@ -361,26 +361,40 @@ class TestSearch:
     async def test_passes_through_attribute_wrappers_it_cannot_interpret(self, make_store):
         store, runtime, _agent = make_store()
         unparseable = {"string": "not-a-number", "type": "bigDecimal"}
+        infinite = {"string": "Infinity", "type": "bigDecimal"}
+        not_a_number = {"string": "NaN", "type": "bigDecimal"}
+        bad_boolean = {"string": "yes", "type": "boolean"}
         unknown_tag = {"string": "x", "type": "someFutureType"}
         not_a_wrapper = {"string": "no type field"}
+        wrapper_of_wrong_types = {"string": 3, "type": 7}
         runtime.retrieve.return_value = {
             "retrievalResults": [
                 {
                     "content": {"text": "fact"},
                     "metadata": {
                         "unparseable": unparseable,
+                        "infinite": infinite,
+                        "not_a_number": not_a_number,
+                        "bad_boolean": bad_boolean,
                         "unknown_tag": unknown_tag,
                         "not_a_wrapper": not_a_wrapper,
+                        "wrapper_of_wrong_types": wrapper_of_wrong_types,
                     },
                 }
             ]
         }
 
         results = await store.search("q")
+        # float("Infinity") and float("NaN") parse, so they need an explicit guard;
+        # returning them would put a non-JSON value into metadata.
         assert results[0].metadata == {
             "unparseable": unparseable,
+            "infinite": infinite,
+            "not_a_number": not_a_number,
+            "bad_boolean": bad_boolean,
             "unknown_tag": unknown_tag,
             "not_a_wrapper": not_a_wrapper,
+            "wrapper_of_wrong_types": wrapper_of_wrong_types,
         }
 
     @pytest.mark.asyncio
