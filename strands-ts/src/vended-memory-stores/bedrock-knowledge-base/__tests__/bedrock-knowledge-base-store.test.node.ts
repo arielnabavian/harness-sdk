@@ -361,7 +361,7 @@ describe('BedrockKnowledgeBaseStore', () => {
       })
 
       const [entry] = await store.search('q')
-      expect(entry.metadata).toStrictEqual({
+      expect(entry?.metadata).toStrictEqual({
         priority: 'high',
         version: 3,
         ratio: 2.5,
@@ -383,7 +383,7 @@ describe('BedrockKnowledgeBaseStore', () => {
       })
 
       const [entry] = await store.search('q')
-      expect(entry.metadata).toStrictEqual({ unparseable, unknownTag, notAWrapper })
+      expect(entry?.metadata).toStrictEqual({ unparseable, unknownTag, notAWrapper })
     })
 
     it('defaults missing content to an empty string and omits absent metadata', async () => {
