@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import uuid
 from typing import TYPE_CHECKING, Any, cast
 
@@ -64,6 +65,43 @@ def _to_attribute_value(value: Any) -> _AttributeValue | None:
     if isinstance(value, list) and len(value) > 0 and all(isinstance(item, str) for item in value):
         return {"type": "STRING_LIST", "stringListValue": value}
     return None
+
+
+def _from_attribute_value(value: Any) -> Any:
+    """Convert a retrieved metadata value back into the primitive the caller stored.
+
+    ``retrieve`` returns non-string attributes as a tagged wrapper — ``{"string": "3.0", "type":
+    "bigDecimal"}`` for a stored ``3`` — so without this a caller who writes ``{"version": 3}`` reads
+    back a dict. Strings already arrive bare.
+
+    A wrapper this does not recognize is returned untouched rather than coerced, so an unmodelled tag
+    or an unparseable payload degrades to the raw value instead of raising.
+    """
+    if not isinstance(value, dict):
+        return value
+
+    encoded = value.get("string")
+    type_tag = value.get("type")
+    if not isinstance(encoded, str) or not isinstance(type_tag, str):
+        return value
+
+    if type_tag in ("bigDecimal", "bigInteger", "number"):
+        try:
+            parsed = float(encoded)
+        except ValueError:
+            return value
+        if math.isinf(parsed) or math.isnan(parsed):
+            return value
+        return int(parsed) if parsed.is_integer() else parsed
+    if type_tag == "boolean":
+        if encoded == "true":
+            return True
+        if encoded == "false":
+            return False
+        return value
+    if type_tag == "string":
+        return encoded
+    return value
 
 
 class BedrockKnowledgeBaseStore(MemoryStore):
@@ -232,7 +270,7 @@ class BedrockKnowledgeBaseStore(MemoryStore):
             metadata: Metadata = {}
             if result.get("metadata"):
                 for key, value in result["metadata"].items():
-                    metadata[key] = value
+                    metadata[key] = _from_attribute_value(value)
             if result.get("location"):
                 metadata["_source_location"] = result["location"]
             if result.get("score") is not None:

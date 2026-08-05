@@ -338,6 +338,54 @@ describe('BedrockKnowledgeBaseStore', () => {
       ])
     })
 
+    // `retrieve` returns non-string attributes as a tagged wrapper, so a caller who
+    // stored a number must not read back an object. Guards against #3653.
+    it('unwraps tagged attribute values back into the primitives that were stored', async () => {
+      const { store, runtime } = makeStore()
+      runtime.send.mockResolvedValue({
+        retrievalResults: [
+          {
+            content: { text: 'fact' },
+            metadata: {
+              priority: 'high',
+              version: { string: '3.0', type: 'bigDecimal' },
+              ratio: { string: '2.5', type: 'bigDecimal' },
+              count: { string: '-12', type: 'bigInteger' },
+              zero: { string: '0', type: 'bigDecimal' },
+              enabled: { string: 'true', type: 'boolean' },
+              disabled: { string: 'false', type: 'boolean' },
+              label: { string: 'wrapped', type: 'string' },
+            },
+          },
+        ],
+      })
+
+      const [entry] = await store.search('q')
+      expect(entry.metadata).toStrictEqual({
+        priority: 'high',
+        version: 3,
+        ratio: 2.5,
+        count: -12,
+        zero: 0,
+        enabled: true,
+        disabled: false,
+        label: 'wrapped',
+      })
+    })
+
+    it('passes through wrappers it cannot interpret rather than coercing them', async () => {
+      const { store, runtime } = makeStore()
+      const unparseable = { string: 'not-a-number', type: 'bigDecimal' }
+      const unknownTag = { string: 'x', type: 'someFutureType' }
+      const notAWrapper = { string: 'no type field' }
+      runtime.send.mockResolvedValue({
+        retrievalResults: [{ content: { text: 'fact' }, metadata: { unparseable, unknownTag, notAWrapper } }],
+      })
+
+      const [entry] = await store.search('q')
+      expect(entry.metadata).toStrictEqual({ unparseable, unknownTag, notAWrapper })
+    })
+
     it('defaults missing content to an empty string and omits absent metadata', async () => {
       const { store, runtime } = makeStore()
       runtime.send.mockResolvedValue({ retrievalResults: [{}] })

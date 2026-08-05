@@ -319,6 +319,71 @@ class TestSearch:
         }
 
     @pytest.mark.asyncio
+    async def test_unwraps_tagged_attribute_values_into_stored_primitives(self, make_store):
+        """``retrieve`` returns non-string attributes as a tagged wrapper.
+
+        A caller who stores a number must not read back a dict. Guards against #3653.
+        """
+        store, runtime, _agent = make_store()
+        runtime.retrieve.return_value = {
+            "retrievalResults": [
+                {
+                    "content": {"text": "fact"},
+                    "metadata": {
+                        "priority": "high",
+                        "version": {"string": "3.0", "type": "bigDecimal"},
+                        "ratio": {"string": "2.5", "type": "bigDecimal"},
+                        "count": {"string": "-12", "type": "bigInteger"},
+                        "zero": {"string": "0", "type": "bigDecimal"},
+                        "enabled": {"string": "true", "type": "boolean"},
+                        "disabled": {"string": "false", "type": "boolean"},
+                        "label": {"string": "wrapped", "type": "string"},
+                    },
+                }
+            ]
+        }
+
+        results = await store.search("q")
+        assert results[0].metadata == {
+            "priority": "high",
+            "version": 3,
+            "ratio": 2.5,
+            "count": -12,
+            "zero": 0,
+            "enabled": True,
+            "disabled": False,
+            "label": "wrapped",
+        }
+        # A stored int must come back as an int, not 3.0.
+        assert isinstance(results[0].metadata["version"], int)
+
+    @pytest.mark.asyncio
+    async def test_passes_through_attribute_wrappers_it_cannot_interpret(self, make_store):
+        store, runtime, _agent = make_store()
+        unparseable = {"string": "not-a-number", "type": "bigDecimal"}
+        unknown_tag = {"string": "x", "type": "someFutureType"}
+        not_a_wrapper = {"string": "no type field"}
+        runtime.retrieve.return_value = {
+            "retrievalResults": [
+                {
+                    "content": {"text": "fact"},
+                    "metadata": {
+                        "unparseable": unparseable,
+                        "unknown_tag": unknown_tag,
+                        "not_a_wrapper": not_a_wrapper,
+                    },
+                }
+            ]
+        }
+
+        results = await store.search("q")
+        assert results[0].metadata == {
+            "unparseable": unparseable,
+            "unknown_tag": unknown_tag,
+            "not_a_wrapper": not_a_wrapper,
+        }
+
+    @pytest.mark.asyncio
     async def test_defaults_missing_content_to_empty_string_and_omits_absent_metadata(self, make_store):
         store, runtime, _agent = make_store()
         runtime.retrieve.return_value = {"retrievalResults": [{}]}

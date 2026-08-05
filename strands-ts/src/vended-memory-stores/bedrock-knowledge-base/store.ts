@@ -48,6 +48,42 @@ function toAttributeValue(value: JSONValue): MetadataAttributeValue | undefined 
 }
 
 /**
+ * Converts a retrieved metadata value back into the primitive the caller stored.
+ *
+ * `retrieve` types metadata as an untyped document and returns non-string
+ * attributes as a tagged wrapper — `{ string: '3.0', type: 'bigDecimal' }` for a
+ * stored `3` — so without this a caller who writes `{ version: 3 }` reads back an
+ * object. Strings already arrive bare.
+ *
+ * A wrapper this does not recognize is returned untouched rather than coerced, so
+ * an unmodelled tag or an unparseable payload degrades to the raw value instead
+ * of becoming `NaN`.
+ */
+function fromAttributeValue(value: JSONValue): JSONValue {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return value
+
+  const { string: encoded, type } = value as { string?: JSONValue; type?: JSONValue }
+  if (typeof encoded !== 'string' || typeof type !== 'string') return value
+
+  switch (type) {
+    case 'bigDecimal':
+    case 'bigInteger':
+    case 'number': {
+      const parsed = Number(encoded)
+      return Number.isFinite(parsed) ? parsed : value
+    }
+    case 'boolean':
+      if (encoded === 'true') return true
+      if (encoded === 'false') return false
+      return value
+    case 'string':
+      return encoded
+    default:
+      return value
+  }
+}
+
+/**
  * S3 ingestion settings for {@link BedrockKnowledgeBaseStore}, required when `dataSourceType` is `'S3'`.
  *
  * An S3 data source indexes objects from a bucket — there is no inline-text path — so `add` uploads
@@ -344,7 +380,7 @@ export class BedrockKnowledgeBaseStore implements MemoryStore {
       const metadata: Record<string, JSONValue> = {}
       if (result.metadata) {
         for (const [key, value] of Object.entries(result.metadata)) {
-          metadata[key] = value as JSONValue
+          metadata[key] = fromAttributeValue(value as JSONValue)
         }
       }
       if (result.location) {
