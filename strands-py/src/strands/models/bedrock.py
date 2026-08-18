@@ -13,7 +13,13 @@ from typing import Any, Literal, TypeVar, cast
 
 import boto3
 from botocore.config import Config as BotocoreConfig
-from botocore.exceptions import ClientError
+from botocore.exceptions import (
+    ClientError,
+    ConnectionClosedError,
+    ConnectTimeoutError,
+    EndpointConnectionError,
+    ReadTimeoutError,
+)
 from pydantic import BaseModel
 from typing_extensions import Unpack, override
 
@@ -82,6 +88,23 @@ def _suppress_task_exception(task: "asyncio.Task[None]") -> None:
 T = TypeVar("T", bound=BaseModel)
 
 DEFAULT_READ_TIMEOUT = 120
+
+# Bedrock error codes for transient service-side failures that should re-run the model call
+# rather than kill the trial. Kept alongside the existing throttling classification and mapped to
+# the same ``ModelThrottledException`` so the SDK's default ``ModelRetryStrategy`` (which retries
+# throttled calls with exponential backoff) picks them up automatically — no caller-side retry
+# configuration needed. Full-source Opus 4.8 audit (strands-agents/stan#9, item 19) attributed 7
+# Stan trials to unretried ``InternalServerException`` alone.
+_BEDROCK_TRANSIENT_ERROR_CODES = frozenset(
+    {
+        "ThrottlingException",
+        "throttlingException",
+        "InternalServerException",
+        "InternalFailure",
+        "ServiceUnavailable",
+        "ServiceUnavailableException",
+    }
+)
 
 
 class BedrockModel(Model):
@@ -1301,10 +1324,7 @@ class BedrockModel(Model):
         except ClientError as e:
             error_message = str(e)
 
-            if (
-                e.response["Error"]["Code"] == "ThrottlingException"
-                or e.response["Error"]["Code"] == "throttlingException"
-            ):
+            if e.response["Error"]["Code"] in _BEDROCK_TRANSIENT_ERROR_CODES:
                 raise ModelThrottledException(error_message) from e
 
             if any(overflow_message in error_message for overflow_message in BEDROCK_CONTEXT_WINDOW_OVERFLOW_MESSAGES):
@@ -1348,6 +1368,19 @@ class BedrockModel(Model):
                 )
 
             raise e
+
+        except (
+            ReadTimeoutError,
+            ConnectTimeoutError,
+            EndpointConnectionError,
+            ConnectionClosedError,
+            ConnectionResetError,
+        ) as e:
+            # Bedrock's ``bedrock-runtime`` endpoint occasionally stalls or drops connections under
+            # load (``AWSHTTPSConnectionPool Read timed out``, connection reset). Route these
+            # through the same retryable-exception surface as throttling so the caller's
+            # ``ModelRetryStrategy`` retries the whole model call.
+            raise ModelThrottledException(f"Bedrock transient connection error: {e}") from e
 
         finally:
             callback()
