@@ -5,6 +5,7 @@ import json
 import logging
 import math
 import threading
+import warnings
 from collections.abc import AsyncGenerator, AsyncIterable, Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, TypedDict, TypeVar
@@ -23,8 +24,6 @@ if TYPE_CHECKING:
     from ..agent.agent_metadata import AgentMetadata
 
 logger = logging.getLogger(__name__)
-
-_warned_fallback_model_ids: set[object] = set()
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -343,15 +342,12 @@ class Model(abc.ABC):
             context_window_limit = DEFAULT_CONTEXT_WINDOW_LIMIT
             config = self.get_config()
             model_id = config.get("model_id") if isinstance(config, dict) else getattr(config, "model_id", None)
-            if model_id not in _warned_fallback_model_ids:
-                _warned_fallback_model_ids.add(model_id)
-                logger.warning(
-                    "model_id=<%s>, default_context_window_limit=<%s> | falling back to default context window limit"
-                    " because none is set or known for this model | utilization estimates and compression thresholds"
-                    " may be inaccurate | set context_window_limit in your model config",
-                    model_id,
-                    DEFAULT_CONTEXT_WINDOW_LIMIT,
-                )
+            warnings.warn(
+                f"model_id=<{model_id}>, default_context_window_limit=<{DEFAULT_CONTEXT_WINDOW_LIMIT}> | falling back"
+                " to default context window limit because none is set or known for this model | utilization estimates"
+                " and compression thresholds may be inaccurate | set context_window_limit in your model config",
+                stacklevel=2,
+            )
 
         return input_tokens / context_window_limit
 

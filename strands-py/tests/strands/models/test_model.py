@@ -1,6 +1,7 @@
 import json
-import logging
 import math
+import warnings
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -646,7 +647,8 @@ class TestEstimateUtilization:
         """Falls back to DEFAULT_CONTEXT_WINDOW_LIMIT (200_000) when not configured."""
         model = self.ConfigurableModel(context_window_limit=None)
 
-        assert model.estimate_utilization(100_000) == 100_000 / 200_000
+        with pytest.warns(UserWarning, match="falling back to default context window limit"):
+            assert model.estimate_utilization(100_000) == 100_000 / 200_000
 
     def test_returns_above_one_on_overflow(self):
         """Returns > 1.0 when tokens exceed the limit."""
@@ -664,51 +666,67 @@ class TestEstimateUtilization:
         """Falls back to default when context_window_limit is 0."""
         model = self.ConfigurableModel(context_window_limit=0)
 
-        assert model.estimate_utilization(100_000) == 100_000 / 200_000
-
-    @pytest.fixture
-    def fresh_fallback_warnings(self, monkeypatch):
-        monkeypatch.setattr("strands.models.model._warned_fallback_model_ids", set())
+        with pytest.warns(UserWarning, match="falling back to default context window limit"):
+            assert model.estimate_utilization(100_000) == 100_000 / 200_000
 
     def _model_with_id(self, model_id, context_window_limit=None):
         model = self.ConfigurableModel(context_window_limit=context_window_limit)
         model.update_config(model_id=model_id)
         return model
 
-    def test_fallback_warning_names_model_id_and_default(self, caplog, fresh_fallback_warnings):
+    def test_fallback_warning_names_model_id_and_default(self):
         model = self._model_with_id("fallback-named-model")
 
-        with caplog.at_level(logging.WARNING, logger="strands.models.model"):
+        with pytest.warns(UserWarning) as record:
             model.estimate_utilization(100_000)
 
-        assert caplog.messages == [
+        assert [str(warning.message) for warning in record] == [
             "model_id=<fallback-named-model>, default_context_window_limit=<200000> | falling back to default context"
             " window limit because none is set or known for this model | utilization estimates and compression"
             " thresholds may be inaccurate | set context_window_limit in your model config"
         ]
 
-    def test_fallback_warning_logs_once_per_model_id(self, caplog, fresh_fallback_warnings):
-        first = self._model_with_id("fallback-once-model-a")
-        same_model_id = self._model_with_id("fallback-once-model-a")
-        other = self._model_with_id("fallback-once-model-b")
+    def test_fallback_warning_reads_model_id_from_object_config(self):
+        class ObjectConfigModel(self.ConfigurableModel):
+            def get_config(self):
+                return SimpleNamespace(model_id="object-config-model", context_window_limit=None)
 
-        with caplog.at_level(logging.WARNING, logger="strands.models.model"):
-            first.estimate_utilization(1000)
-            first.estimate_utilization(2000)
-            same_model_id.estimate_utilization(1000)
-            other.estimate_utilization(1000)
+        with pytest.warns(UserWarning, match=r"^model_id=<object-config-model>, "):
+            ObjectConfigModel().estimate_utilization(1000)
 
-        assert len(caplog.messages) == 2
-        assert "model_id=<fallback-once-model-a>" in caplog.messages[0]
-        assert "model_id=<fallback-once-model-b>" in caplog.messages[1]
+    def test_fallback_warning_points_at_the_caller(self):
+        model = self._model_with_id("fallback-caller-model")
 
-    def test_no_fallback_warning_when_limit_is_set(self, caplog, fresh_fallback_warnings):
+        with pytest.warns(UserWarning) as record:
+            model.estimate_utilization(1000)
+
+        assert record[0].filename == __file__
+
+    def test_fallback_warning_shows_once_per_model_id_under_default_filter(self):
+        models = [
+            self._model_with_id("fallback-once-model-a"),
+            self._model_with_id("fallback-once-model-a"),
+            self._model_with_id("fallback-once-model-b"),
+            self._model_with_id("fallback-once-model-a"),
+        ]
+
+        with warnings.catch_warnings(record=True) as record:
+            warnings.simplefilter("default")
+            for model in models:
+                model.estimate_utilization(1000)
+
+        assert len(record) == 2
+        assert str(record[0].message).startswith("model_id=<fallback-once-model-a>, ")
+        assert str(record[1].message).startswith("model_id=<fallback-once-model-b>, ")
+
+    def test_no_fallback_warning_when_limit_is_set(self):
         model = self._model_with_id("fallback-configured-model", context_window_limit=100_000)
 
-        with caplog.at_level(logging.WARNING, logger="strands.models.model"):
+        with warnings.catch_warnings(record=True) as record:
+            warnings.simplefilter("always")
             model.estimate_utilization(50_000)
 
-        assert caplog.messages == []
+        assert record == []
 
 
 class TestCacheConfig:
