@@ -24,6 +24,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_warned_fallback_model_ids: set[object] = set()
+
 T = TypeVar("T", bound=BaseModel)
 
 
@@ -339,11 +341,15 @@ class Model(abc.ABC):
         context_window_limit = self.context_window_limit
         if not context_window_limit:
             context_window_limit = DEFAULT_CONTEXT_WINDOW_LIMIT
-            if not getattr(self, "_utilization_limit_warned", False):
-                self._utilization_limit_warned = True
+            config = self.get_config()
+            model_id = config.get("model_id") if isinstance(config, dict) else getattr(config, "model_id", None)
+            if model_id not in _warned_fallback_model_ids:
+                _warned_fallback_model_ids.add(model_id)
                 logger.warning(
-                    "context_window_limit=<%s> | context_window_limit not set on model, using default"
-                    " for utilization estimate | set context_window_limit in your model config for accurate results",
+                    "model_id=<%s>, default_context_window_limit=<%s> | falling back to default context window limit"
+                    " because none is set or known for this model | utilization estimates and compression thresholds"
+                    " may be inaccurate | set context_window_limit in your model config",
+                    model_id,
                     DEFAULT_CONTEXT_WINDOW_LIMIT,
                 )
 

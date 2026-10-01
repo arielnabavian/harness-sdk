@@ -145,8 +145,8 @@ _CONTEXT_WINDOW_LIMITS: dict[str, int] = {
 def get_context_window_limit(model_id: str) -> int | None:
     """Look up the context window limit for a model ID.
 
-    For Bedrock model IDs with prefixes (e.g. ``us.anthropic.claude-sonnet-4-6``),
-    prefixes are stripped as a fallback if the direct lookup fails.
+    If the direct lookup fails, region and provider prefixes (e.g. ``global.``, ``openai.``) are stripped
+    one at a time, so ``global.openai.gpt-6-astra`` resolves to the ``gpt-6-astra`` entry.
 
     Args:
         model_id: The model ID to look up.
