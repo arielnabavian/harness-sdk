@@ -1,4 +1,3 @@
-import warnings
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -946,22 +945,6 @@ def test_proactive_compression_uses_default_when_context_window_limit_not_set():
         registry.invoke_callbacks(event)
 
     assert manager.reduce_context_call_count == 1
-
-
-def test_proactive_compression_warns_only_once_per_instance():
-    """Second invocation on the same manager instance suppresses the context_window_limit warning."""
-    manager = _MinimalManager(proactive_compression={"compression_threshold": 0.7})
-    agent = _make_mock_agent(context_window_limit=None)
-    registry = HookRegistry()
-    manager.register_hooks(registry)
-
-    event = _make_threshold_event(agent, projected_input_tokens=150_000)
-    with warnings.catch_warnings(record=True) as record:
-        warnings.simplefilter("default")
-        registry.invoke_callbacks(event)
-        registry.invoke_callbacks(event)
-
-    assert len(record) == 1
 
 
 def test_proactive_compression_exception_swallowed():

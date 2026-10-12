@@ -47,10 +47,12 @@ This monorepo contains Strands harness, the Python and TypeScript SDKs, the docu
 | [`harness-py/`](harness-py/) | Python Strands harness: fully assembled agent via `create_harness()` ([PyPI](https://pypi.org/project/strands-harness/) · [docs](https://strandsagents.com/docs/user-guide/harness/)) |
 | [`harness-ts/`](harness-ts/) | TypeScript Strands harness: fully assembled agent via `createHarness()` ([npm](https://www.npmjs.com/package/@strands-agents/harness) · [docs](https://strandsagents.com/docs/user-guide/harness/)) |
 | [`strands-cli/`](strands-cli/) | `strands` CLI: prototype and chat with a harness agent from the terminal ([npm](https://www.npmjs.com/package/@strands-agents/cli)) |
-| `strands-py/` | Python SDK: agent loop, model providers, tools ([PyPI](https://pypi.org/project/strands-agents/) · [releases](https://github.com/strands-agents/harness-sdk/releases?q=python%2F&expanded=false)) |
-| `strands-ts/` | TypeScript SDK: agent loop, model providers, tools ([npm](https://www.npmjs.com/package/@strands-agents/sdk) · [releases](https://github.com/strands-agents/harness-sdk/releases?q=typescript%2F&expanded=false)) |
-| `site/` | Source for the [strandsagents.com](https://strandsagents.com) documentation site (Astro/Starlight) |
-| `team/` | Governance and cross-SDK process docs (tenets, decisions, PR & compatibility guidelines, and `designs/` proposals) |
+| [`strands-py/`](strands-py/) | Python SDK: agent loop, model providers, tools ([PyPI](https://pypi.org/project/strands-agents/) · [releases](https://github.com/strands-agents/harness-sdk/releases?q=python%2F&expanded=false)) |
+| [`strands-ts/`](strands-ts/) | TypeScript SDK: agent loop, model providers, tools ([npm](https://www.npmjs.com/package/@strands-agents/sdk) · [releases](https://github.com/strands-agents/harness-sdk/releases?q=typescript%2F&expanded=false)) |
+| [`strands-mcp/`](strands-mcp/) | MCP server that gives coding agents knowledge about building with Strands Agents ([PyPI](https://pypi.org/project/strands-agents-mcp-server/)) |
+| [`site/`](site/) | Source for the [strandsagents.com](https://strandsagents.com) documentation site (Astro/Starlight) |
+| [`team/`](team/) | Governance and cross-SDK process docs (tenets, decisions, PR & compatibility guidelines, and `designs/` proposals) |
+| [`test-infra/`](test-infra/) | CDK stack provisioning the AWS resources a subset of integration tests run against (knowledge bases, SSH sandboxes) |
 
 ## Why Strands
 
@@ -145,6 +147,7 @@ For detailed guidance & examples, explore our documentation:
 - [Strands Harness Guide](https://strandsagents.com/docs/user-guide/harness/) ([quickstart](https://strandsagents.com/docs/user-guide/harness/quickstart/) · [configuration reference](https://strandsagents.com/docs/user-guide/harness/reference/configuration/))
 - [Quick Start Guide](https://strandsagents.com/docs/user-guide/quickstart/overview/)
 - [Agent Loop](https://strandsagents.com/docs/user-guide/concepts/agents/agent-loop/)
+- [Bidirectional Streaming](https://strandsagents.com/docs/user-guide/sdk/bidi/) (Python)
 - [Examples](https://strandsagents.com/docs/examples/)
 - API Reference: [Python](https://strandsagents.com/docs/api/python/strands.agent.agent/) · [TypeScript](https://strandsagents.com/docs/api/typescript/)
 - [Production & Deployment Guide](https://strandsagents.com/docs/user-guide/deploy/operating-agents-in-production/)

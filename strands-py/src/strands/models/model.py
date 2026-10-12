@@ -342,11 +342,12 @@ class Model(abc.ABC):
             context_window_limit = DEFAULT_CONTEXT_WINDOW_LIMIT
             config = self.get_config()
             model_id = config.get("model_id") if isinstance(config, dict) else getattr(config, "model_id", None)
+            # Caller depth varies, so stacklevel=1 pins dedup to this line (once per process).
             warnings.warn(
                 f"model_id=<{model_id}>, default_context_window_limit=<{DEFAULT_CONTEXT_WINDOW_LIMIT}> | falling back"
                 " to default context window limit because none is set or known for this model | utilization estimates"
                 " and compression thresholds may be inaccurate | set context_window_limit in your model config",
-                stacklevel=2,
+                stacklevel=1,
             )
 
         return input_tokens / context_window_limit

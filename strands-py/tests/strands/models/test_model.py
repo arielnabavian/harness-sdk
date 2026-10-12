@@ -694,14 +694,6 @@ class TestEstimateUtilization:
         with pytest.warns(UserWarning, match=r"^model_id=<object-config-model>, "):
             ObjectConfigModel().estimate_utilization(1000)
 
-    def test_fallback_warning_points_at_the_caller(self):
-        model = self._model_with_id("fallback-caller-model")
-
-        with pytest.warns(UserWarning) as record:
-            model.estimate_utilization(1000)
-
-        assert record[0].filename == __file__
-
     def test_fallback_warning_shows_once_per_model_id_under_default_filter(self):
         models = [
             self._model_with_id("fallback-once-model-a"),
@@ -727,6 +719,16 @@ class TestEstimateUtilization:
             model.estimate_utilization(50_000)
 
         assert record == []
+
+    def test_warning_is_deduplicated_across_calls_and_instances(self):
+        """The fallback nudge surfaces once per process, not per call or per model instance."""
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter("default", UserWarning)
+
+            self.ConfigurableModel(context_window_limit=None).estimate_utilization(1000)
+            self.ConfigurableModel(context_window_limit=None).estimate_utilization(2000)
+
+        assert len(recorded) == 1
 
 
 class TestCacheConfig:
