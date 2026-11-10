@@ -5,6 +5,7 @@ import type { StartupScreen } from '../ui/run.js'
 import { sanitizeTerminalText, wrapLines } from '../terminal/text.js'
 import type { DiscoveredHarness } from './search.js'
 import { useTerminalSize } from '../ui/terminal-size.js'
+import { useCopyableError } from '../ui/clipboard.js'
 import { userConfigPath } from '../config/store.js'
 import { devFailure } from './errors.js'
 
@@ -40,6 +41,7 @@ export const HarnessPicker = ({ cli, harnesses, warning, onSelect }: PickerProps
   const [language, setLanguage] = useState<'typescript' | 'python'>('typescript')
   const [name, setName] = useState('new-harness')
   const [failure, setFailure] = useState<string>()
+  const failureCopyHint = useCopyableError(failure)
   const [busy, setBusy] = useState(false)
   const pending = useRef(false)
   const { accent, error: errorColor, warning: warningColor, selection: selectionColor, border } = useTheme()
@@ -193,7 +195,12 @@ export const HarnessPicker = ({ cli, harnesses, warning, onSelect }: PickerProps
           </Box>
         </>
       )}
-      {failure ? <Text color={errorColor}>{failure}</Text> : null}
+      {failure ? (
+        <>
+          <Text color={errorColor}>{failure}</Text>
+          <Text dimColor>{failureCopyHint}</Text>
+        </>
+      ) : null}
       <Box marginTop={1}>
         <Text dimColor>
           {busy
