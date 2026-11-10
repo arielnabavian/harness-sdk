@@ -1,0 +1,14 @@
+[tool.pytest.ini_options]
+pythonpath = ["agent"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["agent", "decider", "harbor_wrapper"]
