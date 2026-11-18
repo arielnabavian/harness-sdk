@@ -91,6 +91,10 @@ import {
 } from './optimize-runs.js'
 import {
   TEMPORARY_ITERATION_CHOICES,
+  TEMPORARY_REPETITION_CHOICES,
+  temporaryRolloutCapProblem,
+  TEMPORARY_WIDTH_CHOICES,
+  TEMPORARY_WORKER_CHOICES,
   TEMPORARY_OPTIMIZE_DEFAULTS,
   temporaryCaseSplit,
   temporaryOptimizeWarning,
@@ -136,9 +140,10 @@ const DEFAULT_ITERATIONS = 4
 const SOURCE_SETTLE_MS = 300
 const WIDTH = 4
 const REPETITIONS = 1
+const WORKERS = 4
 const MILLISECONDS = 1000
 
-type RunPlan = Pick<OptimizePlan, 'experiment' | 'iterations' | 'width' | 'split'> & {
+type RunPlan = Pick<OptimizePlan, 'experiment' | 'iterations' | 'width' | 'repetitions' | 'workers' | 'split'> & {
   readonly objective?: OptimizeObjective
 }
 
@@ -685,6 +690,20 @@ export class TemporaryOptimize extends Store<OptimizeState> implements OptimizeS
     )
   }
 
+  setRepetitions(repetitions: number): void {
+    this.updatePlan((plan) =>
+      plan.repetitionChoices.includes(repetitions) ? this.estimate({ ...plan, repetitions }) : plan
+    )
+  }
+
+  setWidth(width: number): void {
+    this.updatePlan((plan) => (plan.widthChoices.includes(width) ? this.estimate({ ...plan, width }) : plan))
+  }
+
+  setWorkers(workers: number): void {
+    this.updatePlan((plan) => (plan.workerChoices.includes(workers) ? { ...plan, workers } : plan))
+  }
+
   setSplit(split: CaseSplit): void {
     this.updatePlan((plan) => {
       if (!plan.splitChoices.some((choice) => sameCaseSplit(choice, split))) return plan
@@ -700,7 +719,7 @@ export class TemporaryOptimize extends Store<OptimizeState> implements OptimizeS
 
   start(): string | undefined {
     const page = this.page
-    if (page.step !== 'setup' || page.plan.objectiveProblem) return undefined
+    if (page.step !== 'setup' || page.plan.objectiveProblem || page.plan.budgetProblem) return undefined
     const knobs = this.catalog.map((knob) => ({
       ...knob,
       enabled: page.plan.knobs.find(({ key }) => key === knob.key)?.enabled ?? false,
@@ -911,7 +930,7 @@ export class TemporaryOptimize extends Store<OptimizeState> implements OptimizeS
     if (this.page.step === 'setup') this.showPage({ step: 'setup', plan: change(this.page.plan) })
   }
 
-  private estimate({ usage: _earlier, ...plan }: OptimizePlan): OptimizePlan {
+  private estimate({ usage: _earlier, budgetProblem: _over, ...plan }: OptimizePlan): OptimizePlan {
     const { rollouts, judgeCalls, usage } = temporaryRolloutEstimate({
       split: plan.split,
       repetitions: plan.repetitions,
@@ -920,7 +939,8 @@ export class TemporaryOptimize extends Store<OptimizeState> implements OptimizeS
       evaluators: this.evaluators,
       ...(this.usageProfile ? { profile: this.usageProfile } : {}),
     })
-    return { ...plan, rollouts, judgeCalls, ...(usage ? { usage } : {}) }
+    const budgetProblem = temporaryRolloutCapProblem(rollouts)
+    return { ...plan, rollouts, judgeCalls, ...(usage ? { usage } : {}), ...(budgetProblem ? { budgetProblem } : {}) }
   }
 
   private async loadModelOptions(): Promise<void> {
@@ -973,7 +993,11 @@ export class TemporaryOptimize extends Store<OptimizeState> implements OptimizeS
           split,
           splitChoices,
           repetitions: REPETITIONS,
+          repetitionChoices: TEMPORARY_REPETITION_CHOICES,
           width: WIDTH,
+          widthChoices: TEMPORARY_WIDTH_CHOICES,
+          workers: WORKERS,
+          workerChoices: TEMPORARY_WORKER_CHOICES,
           iterations: DEFAULT_ITERATIONS,
           iterationChoices: TEMPORARY_ITERATION_CHOICES,
           rollouts: 0,
@@ -1044,7 +1068,9 @@ export class TemporaryOptimize extends Store<OptimizeState> implements OptimizeS
     return {
       experiment: { name: basename(saved.experiment, '.json'), path: saved.experiment, caseCount },
       iterations: saved.iterations,
-      width: WIDTH,
+      width: saved.width ?? WIDTH,
+      repetitions: saved.repetitions ?? REPETITIONS,
+      workers: saved.workers ?? WORKERS,
       split: temporaryCaseSplit(caseCount, saved.split ?? TEMPORARY_OPTIMIZE_DEFAULTS.split),
       ...(saved.objective ? { objective: saved.objective } : {}),
     }
@@ -1160,6 +1186,12 @@ export class TemporaryOptimize extends Store<OptimizeState> implements OptimizeS
             space,
             '--iterations',
             String(plan.iterations),
+            '--width',
+            String(plan.width),
+            '--repetitions',
+            String(plan.repetitions),
+            '--max-concurrency',
+            String(plan.workers),
             ...(shares ? ['--split', shares.join(',')] : []),
             ...(plan.objective ? temporaryObjectiveArguments(plan.objective) : []),
           ],
@@ -1180,6 +1212,9 @@ export class TemporaryOptimize extends Store<OptimizeState> implements OptimizeS
               record: path,
               space,
               iterations: plan.iterations,
+              width: plan.width,
+              repetitions: plan.repetitions,
+              workers: plan.workers,
               ...(shares ? { split: shares } : {}),
               ...(plan.objective ? { objective: plan.objective } : {}),
               startedAt,
